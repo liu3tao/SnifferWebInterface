@@ -1,17 +1,22 @@
 """A generic interface for sniffer devices."""
 
+import time
+
 class BaseSnifferDevice(object):
   def __init__(self):
     super(BaseSnifferDevice, self).__init__()
 
   def start_capture(self):
+    time.sleep(0.5)
     return True
 
   def stop_capture(self):
-    return 'Capture'
+    time.sleep(0.5)
+    return 'Capture Stop @ %s' % time.time()
 
   def split_capture(self):
-    return 'Capture'
+    time.sleep(1)
+    return 'Capture Split @ %s' % time.time()
 
   def close(self):
     return True
