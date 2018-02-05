@@ -1,5 +1,4 @@
 import time
-from datetime import datetime
 from threading import Thread
 from bisect import bisect
 
@@ -8,7 +7,7 @@ from bisect import bisect
 DEFAULT_CAP_DIR = r'C:\Users\tao\bxe400_traces'  # Also a FTP base dir
 DEFAULT_SPLIT_INTERVAL = 120  # split trace every 2 minutes.
 DEFAULT_FTP_LINK = r'ftp://100.96.38.40/'
-
+DEFAULT_CAPTURE_THREAD_CHECK_INTERVAL = 0.1  # Check for new task interval
 
 class CaptureTask(object):
   """Data class for capture tasks"""
@@ -91,7 +90,7 @@ class CaptureManager(object):
           if self._controller.start_capture():
             self._is_capturing = True
             self._capture_start_time = time.time()
-            time.strftime('CaptureManager: start capture @ %x %X.')
+            print(time.strftime('CaptureThread: start capture @ %x %X.'))
           else:
             print('Capture thread: failed to start capture (%s).' %
                   self._controller.model)
@@ -104,7 +103,7 @@ class CaptureManager(object):
           self._trace_file_list.append((trace_start_time,
                                         trace_stop_time,
                                         trace_path))
-          time.strftime('CaptureManager: split capture @ %x %X.')
+          print(time.strftime('CaptureThread: split capture @ %x %X.'))
       else:
         # No running task, stop capture is necessary.
         if self._is_capturing:
@@ -117,8 +116,8 @@ class CaptureManager(object):
                                         trace_path))
           self._previous_start_time = 0
           self._is_capturing = False
-          time.strftime('CaptureManager: stop capture @ %x %X.')
-      time.sleep(0.5)  # check every 0.5 seconds.
+          print(time.strftime('CaptureThread: stop capture @ %x %X.'))
+      time.sleep(DEFAULT_CAPTURE_THREAD_CHECK_INTERVAL)
 
     # Capture thread will shutdown. Stop capture and close the controller.
     if self._is_capturing:
@@ -131,7 +130,7 @@ class CaptureManager(object):
                                     trace_path))
       self._previous_start_time = 0
       self._is_capturing = False
-      time.strftime('CaptureManager: stop capture @ %x %X.')
+      time.strftime('CaptureThread: shutdown capture @ %x %X.')
       self._controller.close()
 
     print('Capture thread shutdown.')
@@ -144,7 +143,7 @@ class CaptureManager(object):
     return False
 
   def _has_running_tasks(self):
-    return not self._running_tasks
+    return bool(self._running_tasks)
 
   def _find_trace_list_by_timestamps(self, start_time, stop_time):
     """Find the list of traces within the start/stop time period."""
@@ -155,7 +154,12 @@ class CaptureManager(object):
     # Then iterate from the start to end, add all traces within specified time.
     for trace_start_time, trace_stop_time, trace_path in \
             self._trace_file_list[start_idx:]:
-      if trace_stop_time < stop_time:
+
+      if trace_stop_time <= start_time:
+        continue
+      elif trace_start_time >= stop_time:
+        break
+      else:
         result.append(trace_path)
     return result
 
@@ -168,7 +172,7 @@ class CaptureManager(object):
     self._running_tasks.append(task)
     self._task_id_map[task_id] = task
     task.start()
-    print('Start task, ID %s' % task_id)
+    print('CaptureManager: Start task, ID %s' % task_id)
 
   def stop_task(self, task_id):
     """Stop the task with specified task id."""
@@ -178,15 +182,15 @@ class CaptureManager(object):
     if task.is_stopped():
       raise TaskStoppedError('Task already stopped.')
     # Now stop task and move it from running queue to finished queue.
-    task.stop()
     try:
       self._running_tasks.remove(task)
     except ValueError:
       # We cannot find the task in the running queue? Something is wrong.
       raise CaptureTaskException('Running task not found in queue')
     finally:
+      task.stop()
       self._finished_tasks.append(task)
-      print('Stop task, ID %s' % task_id)
+      print('CaptureManager: Stop task, ID %s' % task_id)
 
   def get_finished_tasks(self):
     return self._finished_tasks
