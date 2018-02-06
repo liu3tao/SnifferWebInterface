@@ -217,10 +217,14 @@ class CaptureManager(object):
 
   def shutdown(self):
     """Shutdown the capture thread."""
-    self._shutdown = True
     for task in self._running_tasks:
       task.stop()
       self._finished_tasks.append(task)
+    self._shutdown = True
+    self._capture_thread.join()
+
+  def get_controller_model(self):
+    return self._controller.model
 
 
 class CaptureTaskException(Exception):

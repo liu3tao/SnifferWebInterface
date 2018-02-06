@@ -23,7 +23,7 @@ class BaseSnifferDevice(object):
 
   @property
   def model(self):
-    return 'Base sniffer model'
+    return 'Base Sniffer'
 
   @property
   def is_capturing(self):
