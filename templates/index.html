@@ -3,32 +3,122 @@
 <head>
     <meta charset="UTF-8">
     <title>Sniffer Capture Manager</title>
+    <style type="text/css">
+        .task_table {
+            width:100%;
+            border-collapse: collapse;
+        }
+        th, td {
+            padding: 5px;
+            border-bottom: 1px solid #ddd;
+            text-align:left; 
+        }
+        .running_row { background-color: #eeedff }
+    </style>
 </head>
 <body>
 <h1>Capture Device {{ controller_model }}</h1>
 <hr>
-<p>Here is the manual start capture</p>
+<h2>Start Manual Capture</h2>
+<p>
+    <label>Owner: <input type="text" id="manual_owner" value="Manual User"></label>
+    <input type="button" id="start_capture" onclick="start_capture()" value="Start Capture" />
+    <input type="button" id="stop_capture" onclick="stop_capture()" value="Stop Capture" />
+</p>
 <hr>
-<h2>Running Tasks</h2>
 <table class="task_table">
     <thead><tr class="task_header">
-        <th>Capture ID</th>
-        <th>Owner</th>
-        <th>Host</th>
-        <th>Start Time</th>
-        <th>Stop Time</th>
-        <th>Traces</th>
+        <th class="task_status">Status</th>
+        <th class="task_id">Capture ID</th>
+        <th class="task_owner">Owner</th>
+        <th class="task_host">Host</th>
+        <th class="tast_time">Start Time</th>
+        <th class="task_time">Stop Time</th>
+        <th class="task_url">Traces</th>
     </tr></thead>
-    {% for task in finished_tasks %}
-    <tr class="task_row">
-        <td class="task_id">{{ task.id }}</td>
-        <td class="task_owner">{{ task.owner }}</td>
-        <td class="task_host">{{ task.host }}</td>
-        <td class="task_time">{{ task.start_time }}</td>
-        <td class="task_time">{{ task.stop_time }}</td>
-        <td class="task_url"><a href="/status/{{ task.id }}">captured traces</a></td>
+    {% for t in running_tasks %}
+    <tr class="running_row">
+        <td class="task_status"> {{ t[0] }} </td>
+        <td class="task_id">{{ t[1] }}</td>
+        <td class="task_owner">{{ t[2] }}</td>
+        <td class="task_host">{{ t[3] }}</td>
+        <td class="task_time">{{ t[4] }}</td>
+        <td class="task_time">{{ t[5] }}</td>
+        <td class="task_url"><a href="/status/{{ t[1] }}">captured traces</a></td>
+    </tr>
+    {% endfor %}
+    {% for t in finished_tasks %}
+    <tr class="finished_row">
+        <td class="task_status"> {{ t[0] }} </td>
+        <td class="task_id">{{ t[1] }}</td>
+        <td class="task_owner">{{ t[2] }}</td>
+        <td class="task_host">{{ t[3] }}</td>
+        <td class="task_time">{{ t[4] }}</td>
+        <td class="task_time">{{ t[5] }}</td>
+        <td class="task_url"><a href="/status/{{ t[1] }}">captured traces</a></td>
     </tr>
     {% endfor %}
 </table>
+<script>
+    var manual_test_id = sessionStorage.getItem('manual_test_id');
+    var xhttp = new XMLHttpRequest();
+    xhttp.onreadystatechange = function() {
+        if (xhttp.readyState == XMLHttpRequest.DONE) {
+            location.reload();
+        }
+    }
+
+    document.onload = update_manual_ui();
+
+    function update_manual_ui() {
+        if (manual_test_id === null) {
+            document.getElementById("start_capture").disabled = false;
+            document.getElementById("stop_capture").disabled = true;
+        } else {
+            document.getElementById("start_capture").disabled = true;
+            document.getElementById("stop_capture").disabled = false;
+        }
+    }
+
+    function start_capture() {
+        if (manual_test_id === null) {
+            manual_test_id = uuidv4()
+            sessionStorage.setItem('manual_test_id', manual_test_id);
+            var params = { 'owner': document.getElementById('manual_owner').value }
+            var url = '/start/' + manual_test_id + formatParams(params)
+            xhttp.open('GET', url, true);
+            xhttp.send();
+        } else {
+            alert('Cannot start new manual capture.')
+        }
+    }
+
+    function stop_capture() {
+        if (manual_test_id === null) {
+            alert('No manual capture is running.')
+        } else {
+            xhttp.open('GET', '/stop/' + manual_test_id, true);
+            xhttp.send();
+            manual_test_id = null
+            sessionStorage.removeItem('manual_test_id');
+        }
+    }
+
+    function uuidv4() {
+        return ([1e7]+-1e3+-4e3+-8e3+-1e11).replace(/[018]/g, c =>
+            (c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> c / 4).toString(16)
+        )
+    }
+
+    function formatParams( params ){
+      return "?" + Object
+            .keys(params)
+            .map(function(key){
+              return key+"="+encodeURIComponent(params[key])
+            })
+            .join("&")
+    }
+
+</script
 </body>
 </html>

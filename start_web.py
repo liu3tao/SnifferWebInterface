@@ -4,7 +4,7 @@ import os
 import sys
 import signal
 import time
-from flask import Flask, abort, render_template
+from flask import Flask, abort, render_template, request
 from base_sniffer_device import BaseSnifferDevice as SnifferDevice
 from capture_manager import CaptureManager, CaptureTask
 from capture_manager import CaptureTaskException, TaskNotFoundError,\
@@ -14,6 +14,7 @@ from getpass import getuser
 
 # The one and only Flask object
 app = Flask(__name__)
+app.config['DEBUG'] = True
 
 # The one and only capture manager object.
 capture_manager = None
@@ -24,18 +25,17 @@ def landing_page():
   model = capture_manager.get_controller_model()
   # Put together a list of finished tasks.
   task_list = capture_manager.get_finished_tasks()
-  print(task_list)
-  for t in task_list:
-    print(t.id, t.owner, t.host)
+  finished_list = _task_list_to_string(task_list)
+  running_list = _task_list_to_string(capture_manager.get_running_tasks())
   return render_template('index.html', controller_model=model,
-                         running_tasks=[],
-                         finished_tasks=task_list)
+                         running_tasks=running_list,
+                         finished_tasks=finished_list)
 
 @app.route('/start/<capture_uuid>')
 def start_capture(capture_uuid):
   # TODO: get user/host from request object.
-  task_owner = getuser()
-  task_host = 'localhost'
+  task_owner = request.args.get('owner', getuser())
+  task_host = request.headers.get('X-Forwarded-For', request.remote_addr)
   try:
     capture_manager.start_new_task(capture_uuid, task_owner, task_host)
   except DuplicateTaskError:
@@ -67,6 +67,20 @@ def get_capture_filename_by_timestamp(start_time, stop_time):
 
 def _epoch_time_to_human_readable(timestamp):
   return time.strftime('%x %X', time.localtime(timestamp))
+
+def _task_list_to_string(task_list):
+  str_list = []
+  for task in task_list:
+    str_list.append(
+      ( 'Finished' if task.is_stopped() else 'Running',
+        task.id,
+        task.owner,
+        task.host,
+        time.strftime('%x %X', time.localtime(task.start_time)),
+        time.strftime('%x %X', time.localtime(task.stop_time)),
+      ))
+  return str_list
+
 
 def sigint_handler(signal, frame):
   print('Shutting down service.')
