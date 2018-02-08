@@ -22,6 +22,8 @@ capture_manager = None
 
 @app.route('/')
 def landing_page():
+  """Render a landing page for user's information"""
+  # TODO: consider move this GUI page to a dedicated web portal.
   model = capture_manager.get_controller_model()
   # Put together a list of finished tasks.
   task_list = capture_manager.get_finished_tasks()
@@ -33,8 +35,8 @@ def landing_page():
 
 @app.route('/start/<capture_uuid>')
 def start_capture(capture_uuid):
-  # TODO: get user/host from request object.
-  task_owner = request.args.get('owner', getuser())
+  # Get task owner/host from request object.
+  task_owner = request.args.get('owner', 'Unknown User')
   task_host = request.headers.get('X-Forwarded-For', request.remote_addr)
   try:
     capture_manager.start_new_task(capture_uuid, task_owner, task_host)
@@ -56,6 +58,16 @@ def stop_capture(capture_uuid):
 
 @app.route('/status/<capture_uuid>')
 def get_status(capture_uuid):
+  abort(404)
+
+@app.route('/list')
+def get_task_list():
+  """Return a json list of capture tasks."""
+  abort(404)
+
+@app.route('/count/')
+def get_task_count():
+  """Return the count of capture tasks."""
   abort(404)
 
 def get_capture_filename_by_timestamp(start_time, stop_time):

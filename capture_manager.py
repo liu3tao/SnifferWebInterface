@@ -17,6 +17,7 @@ class CaptureTask(object):
     self._stop_timestamp = None   # Float, epoch time
     self._owner = owner           # str, the owner of this task
     self._host = host             # str, from which host the task come
+    self._trace_list = []         # str list, the capture traces of this task.
 
   def start(self):
     self._start_timestamp = time.time()
@@ -29,6 +30,12 @@ class CaptureTask(object):
 
   def is_stopped(self):
     return self._stop_timestamp is not None
+
+  def add_trace(self, trace_path):
+    self._trace_list.append(trace_path)
+
+  def clear_trace(self):
+    self._trace_list[:] = []
 
   @property
   def start_time(self):
@@ -50,6 +57,10 @@ class CaptureTask(object):
   def id(self):
     return self._task_id
 
+  @property
+  def trace_list(self):
+    return self._trace_list
+
 class CaptureManager(object):
   def __init__(self, controller,
                capture_dir=DEFAULT_CAP_DIR,
@@ -66,9 +77,9 @@ class CaptureManager(object):
     self._shutdown = False
     self._capture_dir = capture_dir
     self._split_interval = split_interval  # for temporary override
-    self._running_tasks = list()  # running capture task list
-    self._finished_tasks = list()  # finished capture task list
-    self._task_id_map = dict()  # A dict of task id -> task for task lookup.
+    self._running_tasks = []  # running capture task list
+    self._finished_tasks = []  # finished capture task list
+    self._task_id_map = {}  # A dict of task id -> task for task lookup.
     # Sorted list of captured trace's (start epoch time, filename).
     self._trace_file_list = []
 
@@ -96,44 +107,65 @@ class CaptureManager(object):
                   self._controller.model)
         # split trace based on interval
         if self._should_split():
-          trace_path = self._controller.split_capture()
-          trace_stop_time = time.time()
-          trace_start_time = self._capture_start_time
-          self._capture_start_time = time.time()
-          self._trace_file_list.append((trace_start_time,
-                                        trace_stop_time,
-                                        trace_path))
+          self._split_capture()
           print(time.strftime('CaptureThread: split capture @ %x %X.'))
       else:
         # No running task, stop capture is necessary.
         if self._is_capturing:
           # state change: capture -> idle
-          trace_path = self._controller.stop_capture()
-          trace_stop_time = time.time()
-          trace_start_time = self._capture_start_time
-          self._trace_file_list.append((trace_start_time,
-                                        trace_stop_time,
-                                        trace_path))
-          self._previous_start_time = 0
-          self._is_capturing = False
+          self._stop_capture()
           print(time.strftime('CaptureThread: stop capture @ %x %X.'))
       time.sleep(DEFAULT_CAPTURE_THREAD_CHECK_INTERVAL)
 
     # Capture thread will shutdown. Stop capture and close the controller.
     if self._is_capturing:
       # state change: capture -> shutdown
-      trace_path = self._controller.stop_capture()
-      trace_stop_time = time.time()
-      trace_start_time = self._capture_start_time
-      self._trace_file_list.append((trace_start_time,
-                                    trace_stop_time,
-                                    trace_path))
-      self._previous_start_time = 0
-      self._is_capturing = False
+      self._stop_capture()
       time.strftime('CaptureThread: shutdown capture @ %x %X.')
       self._controller.close()
 
     print('Capture thread shutdown.')
+
+  def _stop_capture(self):
+    """Stop the capture with necessary bookkeeping."""
+    print('in _stop_capture')
+    trace_path = self._controller.stop_capture()
+    trace_stop_time = time.time()
+    trace_start_time = self._capture_start_time
+    self._trace_file_list.append((trace_start_time,
+                                  trace_stop_time,
+                                  trace_path))
+    self._previous_start_time = 0
+    self._is_capturing = False
+    self._add_trace_to_running_tasks(trace_path)
+
+  def _split_capture(self):
+    """Split capture"""
+    trace_path = self._controller.split_capture()
+    trace_start_time = self._capture_start_time
+    trace_stop_time = time.time()
+    self._capture_start_time = trace_stop_time
+    self._trace_file_list.append((trace_start_time,
+                                  trace_stop_time,
+                                  trace_path))
+    self._add_trace_to_running_tasks(trace_path)
+
+  def _add_trace_to_running_tasks(self, trace_path):
+    """Add trace to running task and move finished task to the finished list."""
+    print('in _add_trace_to_running_tasks: %s' % trace_path)
+    finished_idx = []
+    idx = 0
+    for task in self._running_tasks:
+      task.add_trace(trace_path)
+      if task.is_stopped():
+        print('CaptureManager: Task finished, ID %s' % task.id)
+        self._finished_tasks.append(task)
+        finished_idx.append(idx)
+      else:
+        print('stop time: %s' % task.stop_time)
+      idx += 1
+    for idx in reversed(finished_idx):
+      self._running_tasks.pop(idx)
 
   def _should_split(self):
     """Determine if we should split the file."""
@@ -147,7 +179,7 @@ class CaptureManager(object):
 
   def _find_trace_list_by_timestamps(self, start_time, stop_time):
     """Find the list of traces within the start/stop time period."""
-    result = list()
+    result = []
     # Find the first trace with start_time > task_start_time.
     idx = bisect(self._trace_file_list, (start_time, 0.0, ''))
     start_idx = idx - 1 if idx > 0 else 0
@@ -181,16 +213,9 @@ class CaptureManager(object):
       raise TaskNotFoundError('Cannot find task with ID %s' % task_id)
     if task.is_stopped():
       raise TaskStoppedError('Task already stopped.')
-    # Now stop task and move it from running queue to finished queue.
-    try:
-      self._running_tasks.remove(task)
-    except ValueError:
-      # We cannot find the task in the running queue? Something is wrong.
-      raise CaptureTaskException('Running task not found in queue')
-    finally:
-      task.stop()
-      self._finished_tasks.append(task)
-      print('CaptureManager: Stop task, ID %s' % task_id)
+    # Stopped task will be moved to finished list on the next capture split/stop.
+    task.stop()
+    print('CaptureManager: Stop task (wait for last capture), ID %s' % task_id)
 
   def get_finished_tasks(self):
     return self._finished_tasks
@@ -201,25 +226,10 @@ class CaptureManager(object):
   def get_task_by_id(self, task_id):
     return self._task_id_map.get(task_id, None)
 
-  def get_trace_list_by_task_id(self, task_id):
-    """Find the list of traces file URL of a capture task."""
-    task = self.get_task_by_id(task_id)
-    if task is None:
-      raise TaskNotFoundError('Cannot find task with ID %s' % task_id)
-
-    start_time = task.start_time
-    stop_time = task.stop_time
-    if start_time is None:
-      return []
-    if stop_time is None:
-      stop_time = time.time()
-    return self._find_trace_list_by_timestamps(start_time, stop_time)
-
   def shutdown(self):
     """Shutdown the capture thread."""
     for task in self._running_tasks:
       task.stop()
-      self._finished_tasks.append(task)
     self._shutdown = True
     self._capture_thread.join()
 
