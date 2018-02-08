@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
 <head>
     <meta charset="UTF-8">
     <title>Sniffer Capture Manager</title>
@@ -21,8 +21,8 @@
 <hr>
 <h2>Capture Config</h2>
 <ul>
-    {% for key in capture_config %}
-    <li>{{ key }}: {{ capture_config[key] }}</li>
+    {% for key, value in capture_config %}
+    <li>{{ key }}: {{ value }}</li>
     {% endfor %}
 </ul>
 <p>

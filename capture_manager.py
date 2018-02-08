@@ -10,7 +10,14 @@ DEFAULT_SPLIT_INTERVAL = 120  # split trace every 2 minutes.
 DEFAULT_FTP_LINK = r'ftp://100.96.38.40/'
 DEFAULT_CAPTURE_THREAD_CHECK_INTERVAL = 0.1  # Check for new task interval
 DEFAULT_HUMAN_READABLE_TIME_FORMAT = '%x %X'
-DEFAULT_TASK_SAVE_PATH = r'/tmp/capture_tasks.json'
+DEFAULT_TASK_SAVE_PATH = r'C:\Users\tao\Documents\GitHub\SnifferWebInterface\capture_tasks.json'
+
+def get_capture_filename_by_timestamp(start_time, stop_time):
+  """Generate capture filename based on the specified timestamp."""
+  filename = 'cap-%s-%s.btt' % (
+    time.strftime('%y%m%d_%H%M%S', time.localtime(start_time)),
+    time.strftime('%y%m%d_%H%M%S', time.localtime(stop_time)))
+  return filename
 
 class CaptureTask(object):
   """Data class for capture tasks"""
@@ -59,7 +66,7 @@ class CaptureTask(object):
       res['stop_time'] = ''
     res['owner'] = self._owner
     res['host'] = self._host
-    res['trace_list'] = list(self._trace_list)
+    res['trace_list'] = [DEFAULT_FTP_LINK + p for p in self._trace_list]
     res['status'] = self.status
     return res
 
@@ -212,7 +219,9 @@ class CaptureManager(object):
 
   def _stop_capture(self):
     """Stop the capture with necessary bookkeeping."""
-    trace_path = self._controller.stop_capture()
+    trace_path = get_capture_filename_by_timestamp(
+        self._capture_start_time, time.time())
+    trace_path = self._controller.stop_capture(trace_path)
     trace_stop_time = time.time()
     trace_start_time = self._capture_start_time
     self._trace_file_list.append((trace_start_time,
@@ -224,7 +233,9 @@ class CaptureManager(object):
 
   def _split_capture(self):
     """Split capture"""
-    trace_path = self._controller.split_capture()
+    trace_path = get_capture_filename_by_timestamp(
+        self._capture_start_time, time.time())
+    trace_path = self._controller.split_capture(trace_path)
     trace_start_time = self._capture_start_time
     trace_stop_time = time.time()
     self._capture_start_time = trace_stop_time
@@ -329,7 +340,7 @@ class CaptureManager(object):
     """Get capture config as dict."""
     # Capture config is controller's config + split setting.
     # TODO: should be converted to a generic config method.
-    config = {'Capture Split Interval': '%d seconds' % self._split_interval}
+    config = {'Capture Split Interval': '%s seconds' % self._split_interval}
     config.update(self._controller.get_capture_config())
     return config
 
@@ -338,9 +349,12 @@ class CaptureManager(object):
     res = []
     for task in self._finished_tasks:
       res.append(task.to_dict())
-    with open(DEFAULT_TASK_SAVE_PATH, 'wb') as f:
-      json.dump(res, f)
-    print json.dumps(res)
+    try:
+      with open(DEFAULT_TASK_SAVE_PATH, 'wb') as f:
+        json.dump(res, f)
+        print('%d tasks saved to %s.' % (len(res), DEFAULT_TASK_SAVE_PATH))
+    except IOError as ex:
+      print('Failed to save task: %s' % ex)
 
   def _load_tasks_from_disk(self):
     """Load the task from disk"""

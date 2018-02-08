@@ -6,6 +6,7 @@ class BaseSnifferDevice(object):
   def __init__(self):
     super(BaseSnifferDevice, self).__init__()
     self._config = {}  # A dict of sniffer's config parameters.
+    self._model_string = 'Base Sniffer'
 
   def set_capture_config(self, config):
     """Config the sniffer."""
@@ -18,20 +19,20 @@ class BaseSnifferDevice(object):
     time.sleep(0.5)
     return True
 
-  def stop_capture(self):
+  def stop_capture(self, capture_path):
     time.sleep(0.5)
-    return 'Capture Stop @ %s' % time.time()
+    return 'Capture %s Stop @ %s' % (capture_path, time.time())
 
-  def split_capture(self):
+  def split_capture(self, capture_path):
     time.sleep(1)
-    return 'Capture Split @ %s' % time.time()
+    return 'Capture S%s plit @ %s' % (capture_path, time.time())
 
   def close(self):
     return True
 
   @property
   def model(self):
-    return 'Base Sniffer'
+    return self._model_string
 
   @property
   def is_capturing(self):
