@@ -1,6 +1,7 @@
 import time
 from threading import Thread
 from bisect import bisect
+import json
 
 
 # Some default values
@@ -9,6 +10,7 @@ DEFAULT_SPLIT_INTERVAL = 120  # split trace every 2 minutes.
 DEFAULT_FTP_LINK = r'ftp://100.96.38.40/'
 DEFAULT_CAPTURE_THREAD_CHECK_INTERVAL = 0.1  # Check for new task interval
 DEFAULT_HUMAN_READABLE_TIME_FORMAT = '%x %X'
+DEFAULT_TASK_SAVE_PATH = r'/tmp/capture_tasks.json'
 
 class CaptureTask(object):
   """Data class for capture tasks"""
@@ -62,7 +64,7 @@ class CaptureTask(object):
     return res
 
   @classmethod
-  def from_dict(self, task_dict,
+  def from_dict(cls, task_dict,
                 time_format_string=DEFAULT_HUMAN_READABLE_TIME_FORMAT):
     """Convert a dict to task."""
     try:
@@ -167,6 +169,9 @@ class CaptureManager(object):
     self._capture_thread.daemon = True # thread dies with the program
     self._capture_thread.start()
     self._capture_start_time = 0
+
+    # Load previous captures
+    self._load_tasks_from_disk()
 
   def _capture_thread_func(self):
     """Thread function for capture management."""
@@ -315,9 +320,38 @@ class CaptureManager(object):
       task.stop()
     self._shutdown = True
     self._capture_thread.join()
+    self._save_tasks_to_disk()
 
   def get_controller_model(self):
     return self._controller.model
+
+  def get_capture_config(self):
+    """Get capture config as dict."""
+    # Capture config is controller's config + split setting.
+    # TODO: should be converted to a generic config method.
+    config = {'Capture Split Interval': '%d seconds' % self._split_interval}
+    config.update(self._controller.get_capture_config())
+    return config
+
+  def _save_tasks_to_disk(self):
+    """Save the tasks to persistent storage."""
+    res = []
+    for task in self._finished_tasks:
+      res.append(task.to_dict())
+    with open(DEFAULT_TASK_SAVE_PATH, 'wb') as f:
+      json.dump(res, f)
+    print json.dumps(res)
+
+  def _load_tasks_from_disk(self):
+    """Load the task from disk"""
+    res = []
+    try:
+      with open(DEFAULT_TASK_SAVE_PATH, 'rb') as f:
+        res = json.load(f)
+    except IOError:
+      print 'No saved task, starting fresh.'
+    for t in res:
+      self._finished_tasks.append(CaptureTask.from_dict(t))
 
 
 class CaptureTaskException(Exception):

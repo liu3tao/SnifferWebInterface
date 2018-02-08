@@ -17,15 +17,21 @@
     </style>
 </head>
 <body>
-<h1>Capture Device {{ controller_model }}</h1>
+<h1>Capture Device: {{ controller_model }}</h1>
 <hr>
-<h2>Start Manual Capture</h2>
+<h2>Capture Config</h2>
+<ul>
+    {% for key in capture_config %}
+    <li>{{ key }}: {{ capture_config[key] }}</li>
+    {% endfor %}
+</ul>
 <p>
     <label>Owner: <input type="text" id="manual_owner" value="Manual User"></label>
-    <input type="button" id="start_capture" onclick="start_capture()" value="Start Capture" />
-    <input type="button" id="stop_capture" onclick="stop_capture()" value="Stop Capture" />
+    <input type="button" id="start_capture" onclick="start_capture()" value="Start Manual Capture" />
+    <input type="button" id="stop_capture" onclick="stop_capture()" value="Stop Manual Capture" />
 </p>
 <hr>
+<h2>Capture Tasks</h2>
 <table class="task_table">
     <thead><tr class="task_header">
         <th class="task_status">Status</th>

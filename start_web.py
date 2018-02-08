@@ -14,7 +14,7 @@ from getpass import getuser
 
 # The one and only Flask object
 app = Flask(__name__)
-app.config['DEBUG'] = True
+# app.config['DEBUG'] = True
 
 # The one and only capture manager object.
 capture_manager = None
@@ -26,13 +26,17 @@ def landing_page():
   # TODO: consider move this GUI page to a dedicated web portal.
   model = capture_manager.get_controller_model()
   # Put together a list of finished tasks.
-  finished_list = _task_list_to_string(capture_manager.get_finished_tasks())
-  running_list = _task_list_to_string(capture_manager.get_running_tasks())
-  pending_list = _task_list_to_string(capture_manager.get_pending_tasks())
+  finished_list = _task_list_to_string(
+      reversed(capture_manager.get_finished_tasks()))
+  running_list = _task_list_to_string(
+      reversed(capture_manager.get_running_tasks()))
+  pending_list = _task_list_to_string(
+      reversed(capture_manager.get_pending_tasks()))
   running_list.extend(pending_list)
   return render_template('index.html', controller_model=model,
                          running_tasks=running_list,
-                         finished_tasks=finished_list)
+                         finished_tasks=finished_list,
+                         capture_config=capture_manager.get_capture_config())
 
 @app.route('/start/<capture_uuid>')
 def start_capture(capture_uuid):

@@ -5,6 +5,14 @@ import time
 class BaseSnifferDevice(object):
   def __init__(self):
     super(BaseSnifferDevice, self).__init__()
+    self._config = {}  # A dict of sniffer's config parameters.
+
+  def set_capture_config(self, config):
+    """Config the sniffer."""
+    self._config.update(config)
+
+  def get_capture_config(self):
+    return self._config
 
   def start_capture(self):
     time.sleep(0.5)
