@@ -100,3 +100,5 @@ ENV/
 
 # pycharm
 .idea/
+
+capture_tasks.json

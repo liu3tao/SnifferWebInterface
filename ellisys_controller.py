@@ -79,10 +79,12 @@ class EllisysController(BaseSnifferDevice):
   def close(self):
     if self.communicator:
       try:
+        print('Destorying Ellisys Controller...')
         if self.remote_control.IsRecording():
           self.remote_control.AbortRecordingAndDiscardTraceFile()
         self.communicator.destroy()
         self._is_closed = True
+        print('Done.')
       except:
         traceback.print_exc()
 

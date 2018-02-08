@@ -213,8 +213,6 @@ class CaptureManager(object):
       # state change: capture -> shutdown
       self._stop_capture()
       time.strftime('CaptureThread: shutdown capture @ %x %X.')
-      self._controller.close()
-
     print('Capture thread shutdown.')
 
   def _stop_capture(self):
@@ -331,6 +329,7 @@ class CaptureManager(object):
       task.stop()
     self._shutdown = True
     self._capture_thread.join()
+    self._controller.close()
     self._save_tasks_to_disk()
 
   def get_controller_model(self):
