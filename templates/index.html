@@ -38,25 +38,25 @@
     </tr></thead>
     {% for t in running_tasks %}
     <tr class="running_row">
-        <td class="task_status"> {{ t[0] }} </td>
-        <td class="task_id">{{ t[1] }}</td>
-        <td class="task_owner">{{ t[2] }}</td>
-        <td class="task_host">{{ t[3] }}</td>
-        <td class="task_time">{{ t[4] }}</td>
-        <td class="task_time">{{ t[5] }}</td>
-        <td class="task_url"><a href="/status/{{ t[1] }}">captured traces</a></td>
+        <td class="task_status"> {{ t['status'] }} </td>
+        <td class="task_id">{{ t['id'] }}</td>
+        <td class="task_owner">{{ t['owner'] }}</td>
+        <td class="task_host">{{ t['host'] }}</td>
+        <td class="task_time">{{ t['start_time'] }}</td>
+        <td class="task_time">{{ t['stop_time'] }}</td>
+        <td class="task_url"><a href="/trace/{{ t['id'] }}">captured traces</a></td>
     </tr>
     {% endfor %}
     {% for t in finished_tasks %}
     <tr class="finished_row">
-        <td class="task_status"> {{ t[0] }} </td>
-        <td class="task_id">{{ t[1] }}</td>
-        <td class="task_owner">{{ t[2] }}</td>
-        <td class="task_host">{{ t[3] }}</td>
-        <td class="task_time">{{ t[4] }}</td>
-        <td class="task_time">{{ t[5] }}</td>
-        <td class="task_url"><a href="/status/{{ t[1] }}">captured traces</a></td>
-    </tr>
+        <td class="task_status"> {{ t['status'] }} </td>
+        <td class="task_id">{{ t['id'] }}</td>
+        <td class="task_owner">{{ t['owner'] }}</td>
+        <td class="task_host">{{ t['host'] }}</td>
+        <td class="task_time">{{ t['start_time'] }}</td>
+        <td class="task_time">{{ t['stop_time'] }}</td>
+        <td class="task_url"><a href="/trace/{{ t['id'] }}">captured traces</a></td>
+   </tr>
     {% endfor %}
 </table>
 <script>

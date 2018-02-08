@@ -8,6 +8,7 @@ DEFAULT_CAP_DIR = r'C:\Users\tao\bxe400_traces'  # Also a FTP base dir
 DEFAULT_SPLIT_INTERVAL = 120  # split trace every 2 minutes.
 DEFAULT_FTP_LINK = r'ftp://100.96.38.40/'
 DEFAULT_CAPTURE_THREAD_CHECK_INTERVAL = 0.1  # Check for new task interval
+DEFAULT_HUMAN_READABLE_TIME_FORMAT = '%x %X'
 
 class CaptureTask(object):
   """Data class for capture tasks"""
@@ -18,9 +19,11 @@ class CaptureTask(object):
     self._owner = owner           # str, the owner of this task
     self._host = host             # str, from which host the task come
     self._trace_list = []         # str list, the capture traces of this task.
+    self._trace_pending = False   # bool, True if capture is pending.
 
   def start(self):
     self._start_timestamp = time.time()
+    self._trace_pending = True
 
   def stop(self):
     self._stop_timestamp = time.time()
@@ -31,11 +34,86 @@ class CaptureTask(object):
   def is_stopped(self):
     return self._stop_timestamp is not None
 
-  def add_trace(self, trace_path):
-    self._trace_list.append(trace_path)
+  def is_trace_pending(self):
+    return self._trace_pending
 
-  def clear_trace(self):
-    self._trace_list[:] = []
+  def add_trace(self, trace_path, more_trace=True):
+    self._trace_list.append(trace_path)
+    self._trace_pending = more_trace
+
+  def to_dict(self, time_format_string=DEFAULT_HUMAN_READABLE_TIME_FORMAT):
+    """Convert task to dict for easy serialization."""
+    res = {}
+    res['id'] = self._task_id
+    if self._start_timestamp:
+      res['start_time'] = time.strftime(
+          time_format_string, time.localtime(self._start_timestamp))
+    else:
+      res['start_time'] = ''
+    if self._stop_timestamp:
+      res['stop_time'] = time.strftime(
+          time_format_string, time.localtime(self._stop_timestamp))
+    else:
+      res['stop_time'] = ''
+    res['owner'] = self._owner
+    res['host'] = self._host
+    res['trace_list'] = list(self._trace_list)
+    res['status'] = self.status
+    return res
+
+  @classmethod
+  def from_dict(self, task_dict,
+                time_format_string=DEFAULT_HUMAN_READABLE_TIME_FORMAT):
+    """Convert a dict to task."""
+    try:
+      task_id = task_dict['id']
+      owner = task_dict['owner']
+      host = task_dict['host']
+      # Read the string to epoch time.
+      start_timestamp = time.mktime(
+          time.strptime(task_dict['start_time'], time_format_string))
+      stop_timestamp = time.mktime(
+          time.strptime(task_dict['stop_time'], time_format_string))
+      if isinstance(task_dict['trace_list'], list):
+        trace_list = task_dict['trace_list']
+      else:
+        raise CaptureTaskException('Invalid trace list.')
+      pending = False
+      if task_dict['status'] in ['Running', 'Pending']:
+        pending = True
+
+      task = CaptureTask(task_id, owner, host)
+      task._start_timestamp = start_timestamp
+      task._stop_timestamp = stop_timestamp
+      task._trace_list = trace_list
+      task._trace_pending = pending
+      return task
+    except KeyError as ex:
+      msg = 'Failed to load task from dict, missing %s' % ex
+      raise CaptureTaskException(msg)
+    except ValueError as ex:
+      msg = 'Failed to parse time: %s.' % ex
+      raise CaptureTaskException(msg)
+
+  @property
+  def status(self):
+    """Returns task status as str.
+
+    There are 5 possible status:
+    - Not started: no start time set
+    - Running: started and not stopped.
+    - Pending: stopped, waiting for last capture to finish.
+    - Finished: stopped and all capture is done.
+    """
+    if self._start_timestamp is None:
+      st = 'Not Started'
+    elif self._stop_timestamp is None:
+      st = 'Running'
+    elif self._trace_pending:
+      st = 'Pending'
+    else:
+      st = 'Finished'
+    return st
 
   @property
   def start_time(self):
@@ -78,6 +156,7 @@ class CaptureManager(object):
     self._capture_dir = capture_dir
     self._split_interval = split_interval  # for temporary override
     self._running_tasks = []  # running capture task list
+    self._pending_tasks = []  # stopped tasks waiting for last capture to finish.
     self._finished_tasks = []  # finished capture task list
     self._task_id_map = {}  # A dict of task id -> task for task lookup.
     # Sorted list of captured trace's (start epoch time, filename).
@@ -128,7 +207,6 @@ class CaptureManager(object):
 
   def _stop_capture(self):
     """Stop the capture with necessary bookkeeping."""
-    print('in _stop_capture')
     trace_path = self._controller.stop_capture()
     trace_stop_time = time.time()
     trace_start_time = self._capture_start_time
@@ -137,7 +215,7 @@ class CaptureManager(object):
                                   trace_path))
     self._previous_start_time = 0
     self._is_capturing = False
-    self._add_trace_to_running_tasks(trace_path)
+    self._add_trace_to_tasks(trace_path)
 
   def _split_capture(self):
     """Split capture"""
@@ -148,24 +226,20 @@ class CaptureManager(object):
     self._trace_file_list.append((trace_start_time,
                                   trace_stop_time,
                                   trace_path))
-    self._add_trace_to_running_tasks(trace_path)
+    self._add_trace_to_tasks(trace_path)
 
-  def _add_trace_to_running_tasks(self, trace_path):
+  def _add_trace_to_tasks(self, trace_path):
     """Add trace to running task and move finished task to the finished list."""
-    print('in _add_trace_to_running_tasks: %s' % trace_path)
     finished_idx = []
     idx = 0
     for task in self._running_tasks:
       task.add_trace(trace_path)
-      if task.is_stopped():
-        print('CaptureManager: Task finished, ID %s' % task.id)
-        self._finished_tasks.append(task)
-        finished_idx.append(idx)
-      else:
-        print('stop time: %s' % task.stop_time)
-      idx += 1
-    for idx in reversed(finished_idx):
-      self._running_tasks.pop(idx)
+    # Reverse the list so they are in time order.
+    for task in reversed(self._pending_tasks):
+      task.add_trace(trace_path, more_trace=False)
+      print('CaptureManager: Task finished, ID %s' % task.id)
+      self._finished_tasks.append(task)
+    self._pending_tasks = []
 
   def _should_split(self):
     """Determine if we should split the file."""
@@ -213,8 +287,14 @@ class CaptureManager(object):
       raise TaskNotFoundError('Cannot find task with ID %s' % task_id)
     if task.is_stopped():
       raise TaskStoppedError('Task already stopped.')
-    # Stopped task will be moved to finished list on the next capture split/stop.
+    # Stopped task will be moved to pending list. Task in pending list will be
+    # moved to finished on the next capture split/stop.
     task.stop()
+    try:
+      self._running_tasks.remove(task)
+    except ValueError:
+      raise TaskNotFoundError('Cannot find task in queue. ID %s' % task_id)
+    self._pending_tasks.append(task)
     print('CaptureManager: Stop task (wait for last capture), ID %s' % task_id)
 
   def get_finished_tasks(self):
@@ -222,6 +302,9 @@ class CaptureManager(object):
 
   def get_running_tasks(self):
     return self._running_tasks
+
+  def get_pending_tasks(self):
+    return self._pending_tasks
 
   def get_task_by_id(self, task_id):
     return self._task_id_map.get(task_id, None)
@@ -251,4 +334,3 @@ class TaskNotFoundError(CaptureTaskException):
 
 class TaskStoppedError(CaptureTaskException):
   pass
-

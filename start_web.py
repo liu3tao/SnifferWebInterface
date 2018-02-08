@@ -4,7 +4,7 @@ import os
 import sys
 import signal
 import time
-from flask import Flask, abort, render_template, request
+from flask import Flask, abort, render_template, request, jsonify
 from base_sniffer_device import BaseSnifferDevice as SnifferDevice
 from capture_manager import CaptureManager, CaptureTask
 from capture_manager import CaptureTaskException, TaskNotFoundError,\
@@ -26,9 +26,10 @@ def landing_page():
   # TODO: consider move this GUI page to a dedicated web portal.
   model = capture_manager.get_controller_model()
   # Put together a list of finished tasks.
-  task_list = capture_manager.get_finished_tasks()
-  finished_list = _task_list_to_string(task_list)
+  finished_list = _task_list_to_string(capture_manager.get_finished_tasks())
   running_list = _task_list_to_string(capture_manager.get_running_tasks())
+  pending_list = _task_list_to_string(capture_manager.get_pending_tasks())
+  running_list.extend(pending_list)
   return render_template('index.html', controller_model=model,
                          running_tasks=running_list,
                          finished_tasks=finished_list)
@@ -46,6 +47,7 @@ def start_capture(capture_uuid):
 
 @app.route('/stop/<capture_uuid>')
 def stop_capture(capture_uuid):
+  """Stop the capture"""
   try:
     capture_manager.stop_task(capture_uuid)
   except TaskNotFoundError:
@@ -58,17 +60,19 @@ def stop_capture(capture_uuid):
 
 @app.route('/status/<capture_uuid>')
 def get_status(capture_uuid):
-  abort(404)
+  """Returns JSON of the capture task."""
+  task = capture_manager.get_task_by_id(capture_uuid)
+  if task is None:
+    abort(404)
+  return jsonify(task.to_dict())
 
-@app.route('/list')
-def get_task_list():
-  """Return a json list of capture tasks."""
-  abort(404)
-
-@app.route('/count/')
-def get_task_count():
-  """Return the count of capture tasks."""
-  abort(404)
+@app.route('/trace/<capture_uuid>')
+def get_trace(capture_uuid):
+  """Returns JSON list of the captured traces of the task."""
+  task = capture_manager.get_task_by_id(capture_uuid)
+  if task is None:
+    abort(404)
+  return jsonify(task.to_dict()['trace_list'])
 
 def get_capture_filename_by_timestamp(start_time, stop_time):
   """Generate capture filename based on the specified timestamp."""
@@ -83,14 +87,8 @@ def _epoch_time_to_human_readable(timestamp):
 def _task_list_to_string(task_list):
   str_list = []
   for task in task_list:
-    str_list.append(
-      ( 'Finished' if task.is_stopped() else 'Running',
-        task.id,
-        task.owner,
-        task.host,
-        time.strftime('%x %X', time.localtime(task.start_time)),
-        time.strftime('%x %X', time.localtime(task.stop_time)),
-      ))
+    task_dict = task.to_dict()
+    str_list.append(task_dict)
   return str_list
 
 
