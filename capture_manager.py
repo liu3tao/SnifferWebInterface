@@ -2,6 +2,7 @@ import time
 from threading import Thread
 from bisect import bisect
 import json
+import os
 
 
 # Some default values
@@ -66,7 +67,10 @@ class CaptureTask(object):
       res['stop_time'] = ''
     res['owner'] = self._owner
     res['host'] = self._host
-    res['trace_list'] = [DEFAULT_FTP_LINK + p for p in self._trace_list]
+    tmp = []
+    for p in self._trace_list:
+      tmp.append(p if DEFAULT_FTP_LINK in p else DEFAULT_FTP_LINK + p)
+    res['trace_list'] = tmp
     res['status'] = self.status
     return res
 
@@ -219,7 +223,9 @@ class CaptureManager(object):
     """Stop the capture with necessary bookkeeping."""
     trace_path = get_capture_filename_by_timestamp(
         self._capture_start_time, time.time())
-    trace_path = self._controller.stop_capture(trace_path)
+    real_path = os.path.join(DEFAULT_CAP_DIR, trace_path)
+    print('CaptureManager: stopping capture, trace path %s' % real_path)
+    trace_path = self._controller.stop_capture(real_path)
     trace_stop_time = time.time()
     trace_start_time = self._capture_start_time
     self._trace_file_list.append((trace_start_time,
@@ -233,7 +239,9 @@ class CaptureManager(object):
     """Split capture"""
     trace_path = get_capture_filename_by_timestamp(
         self._capture_start_time, time.time())
-    trace_path = self._controller.split_capture(trace_path)
+    real_path = os.path.join(DEFAULT_CAP_DIR, trace_path)
+    print('CaptureManager: spliting capture, trace path %s' % real_path)
+    trace_path = self._controller.split_capture(real_path)
     trace_start_time = self._capture_start_time
     trace_stop_time = time.time()
     self._capture_start_time = trace_stop_time
@@ -350,7 +358,7 @@ class CaptureManager(object):
       res.append(task.to_dict())
     try:
       with open(DEFAULT_TASK_SAVE_PATH, 'wb') as f:
-        json.dump(res, f)
+        json.dump(res, f, indent=1)
         print('%d tasks saved to %s.' % (len(res), DEFAULT_TASK_SAVE_PATH))
     except IOError as ex:
       print('Failed to save task: %s' % ex)
@@ -364,7 +372,9 @@ class CaptureManager(object):
     except IOError:
       print 'No saved task, starting fresh.'
     for t in res:
-      self._finished_tasks.append(CaptureTask.from_dict(t))
+      task = CaptureTask.from_dict(t)
+      self._finished_tasks.append(task)
+      self._task_id_map[task.id] = task
 
 
 class CaptureTaskException(Exception):
