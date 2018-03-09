@@ -1,13 +1,11 @@
-"""Main entry point of Ellisys controller."""
+"""Main entry point of Web interface for Ellisys capture manager."""
 
-import os
 import sys
 import signal
 import time
 from flask import Flask, abort, render_template, request, jsonify
-from base_sniffer_device import BaseSnifferDevice
 from ellisys_controller import EllisysController
-from capture_manager import CaptureManager, CaptureTask
+from capture_manager import CaptureManager
 from capture_manager import CaptureTaskException, TaskNotFoundError,\
     TaskStoppedError, DuplicateTaskError
 from getpass import getuser

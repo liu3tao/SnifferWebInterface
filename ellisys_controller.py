@@ -1,13 +1,10 @@
-import sys
-import traceback
-import os
-import time
-import tempfile
-import logging
-import Ice
-from base_sniffer_device import BaseSnifferDevice
+"""Ellisys Bluetooth Explorer BXE400 Controller."""
 
-Ice.loadSlice("--all -I. BluetoothAnalyzerRemoteControl.ice")
+import traceback
+from base_sniffer_device import BaseSnifferDevice
+import Ice
+
+Ice.loadSlice('--all -I. BluetoothAnalyzerRemoteControl.ice')
 
 import Ellisys.Platform.NetworkRemoteControl.Analyzer
 
@@ -15,30 +12,39 @@ import Ellisys.Platform.NetworkRemoteControl.Analyzer
 class RemoteControlException(Exception):
   pass
 
+
 class EllisysController(BaseSnifferDevice):
   """Controller class for Ellisys BXE400."""
-  def __init__(self, host_ip='localhost', host_port=54321):
+
+  def __init__(self, host_addr='localhost', host_port=54321):
+    """Create connection to the Ellisys Remote Control API.
+
+    Args:
+      host_addr: str, the address of Ellisys Remote API host.
+      host_port: int, the port of Ellisys Remote API host.
+    """
     super(EllisysController, self).__init__()
-    self.host_ip = host_ip
+    self.host_ip = host_addr
     self.host_port = host_port
-    self.proxy_string = "Ellisys.AnalyzerRemoteControl:tcp -h {0} -p {1}".format(
-      host_ip, host_port)
+    self.proxy_string = 'Ellisys.AnalyzerRemoteControl:tcp -h {0} -p {1}'.\
+        format(host_addr, host_port)
 
     try:
       # Initialize ICE
-      initData = Ice.InitializationData()
-      initData.properties = Ice.createProperties([], initData.properties)
-      initData.properties.setProperty("Ice.Default.EncodingVersion", "1.0")
+      init_data = Ice.InitializationData()
+      init_data.properties = Ice.createProperties([], init_data.properties)
+      init_data.properties.setProperty('Ice.Default.EncodingVersion', '1.0')
 
-      communicator = Ice.initialize(initData)
+      communicator = Ice.initialize(init_data)
       proxy = communicator.stringToProxy(self.proxy_string)
-      remote_control = Ellisys.Platform.NetworkRemoteControl.Analyzer.BluetoothAnalyzerRemoteControlPrx.checkedCast(proxy)
+      remote_control = Ellisys.Platform.NetworkRemoteControl.Analyzer.\
+            BluetoothAnalyzerRemoteControlPrx.checkedCast(proxy)
     except Exception as ex:
       traceback.print_exc()
       raise ex
 
     if not remote_control:
-      raise RemoteControlException("Invalid proxy {0}".format(proxyString))
+      raise RemoteControlException('Invalid proxy %s' % self.proxy_string)
     self.communicator = communicator
     self.remote_control = remote_control
     self._is_closed = False
@@ -51,7 +57,7 @@ class EllisysController(BaseSnifferDevice):
     self._model_string = 'Ellisys BXE400'
 
   def start_capture(self):
-    """Start recording untill stop capture is called."""
+    """Start recording until stop capture is called."""
     if self._is_closed:
       return False
 
@@ -60,26 +66,38 @@ class EllisysController(BaseSnifferDevice):
     return True
 
   def split_capture(self, trace_path):
-    """Split the capture and continue reording."""
+    """Split the capture and continue recording.
+
+    Args:
+      trace_path, str, the path to save the trace.
+
+    returns: str, path of the saved trace. Empty if save failed.
+    """
     if self._is_closed or not self.remote_control.IsRecording():
       return ''
     self.remote_control.SplitTraceFileAndContinueRecording(trace_path)
-    print("Trace splited to '{0}'".format(trace_path))
+    print('Trace spilt to {0}'.format(trace_path))
     return trace_path
 
   def stop_capture(self, trace_path):
-    """Stop recording"""
+    """Stop recording and save the capture.
+    Args:
+      trace_path, str, the path to save the trace.
+
+    returns: str, path of the saved trace. Empty if save failed.
+    """
     if self._is_closed or not self.remote_control.IsRecording():
       return ''
     # workaround to allow ftp control the saved file.
     self.remote_control.StopRecordingAndSaveTraceFile(trace_path, True)
-    print("Trace saved to '{0}'".format(trace_path))
+    print('Trace saved to {0}'.format(trace_path))
     return trace_path
 
   def close(self):
+    """Close the controller connection."""
     if self.communicator:
       try:
-        print('Destorying Ellisys Controller...')
+        print('Destroying Ellisys Controller...')
         if self.remote_control.IsRecording():
           self.remote_control.AbortRecordingAndDiscardTraceFile()
         self.communicator.destroy()

@@ -2,7 +2,10 @@
 
 import time
 
+
 class BaseSnifferDevice(object):
+  """A base sniffer device that can be used for test propose."""
+
   def __init__(self):
     super(BaseSnifferDevice, self).__init__()
     self._config = {}  # A dict of sniffer's config parameters.
@@ -25,7 +28,7 @@ class BaseSnifferDevice(object):
 
   def split_capture(self, capture_path):
     time.sleep(1)
-    return 'Capture S%s plit @ %s' % (capture_path, time.time())
+    return 'Capture %s Split @ %s' % (capture_path, time.time())
 
   def close(self):
     return True
