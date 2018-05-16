@@ -1,2 +1,2 @@
 # SnifferWebInterface
-A geneic web interface for sniffer device.
+A generic web interface for sniffer device.

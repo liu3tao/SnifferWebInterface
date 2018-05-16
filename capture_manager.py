@@ -1,19 +1,35 @@
-import time
-from threading import Thread
+"""Capture manager for sniffer device."""
+
 from bisect import bisect
 import json
+import os
+import time
+from threading import Thread
 
 
-# Some default values
+
+# Some default values, specific to Ellisys BXE400 in 2011 lab.
+# TODO(liuta): create config log for these parameters.
 DEFAULT_CAP_DIR = r'C:\Users\tao\bxe400_traces'  # Also a FTP base dir
 DEFAULT_SPLIT_INTERVAL = 120  # split trace every 2 minutes.
 DEFAULT_FTP_LINK = r'ftp://100.96.38.40/'
 DEFAULT_CAPTURE_THREAD_CHECK_INTERVAL = 0.1  # Check for new task interval
-DEFAULT_HUMAN_READABLE_TIME_FORMAT = '%x %X'
-DEFAULT_TASK_SAVE_PATH = r'/tmp/capture_tasks.json'
+DEFAULT_HUMAN_READABLE_TIME_FORMAT = '%y-%m-%d %H:%M:%S'
+DEFAULT_TASK_SAVE_PATH = (
+    r'C:\Users\tao\Documents\GitHub\SnifferWebInterface\capture_tasks.json')
+
+
+def get_capture_filename_by_timestamp(start_time, stop_time):
+  """Generate capture filename based on the specified timestamp."""
+  filename = 'cap-%s-%s.btt' % (
+      time.strftime('%y%m%d_%H%M%S', time.localtime(start_time)),
+      time.strftime('%y%m%d_%H%M%S', time.localtime(stop_time)))
+  return filename
+
 
 class CaptureTask(object):
-  """Data class for capture tasks"""
+  """Data class for capture tasks."""
+
   def __init__(self, task_id, owner, host):
     self._task_id = task_id       # str, the id of this task
     self._start_timestamp = None  # Float, epoch time
@@ -59,7 +75,10 @@ class CaptureTask(object):
       res['stop_time'] = ''
     res['owner'] = self._owner
     res['host'] = self._host
-    res['trace_list'] = list(self._trace_list)
+    tmp = []
+    for p in self._trace_list:
+      tmp.append(p if DEFAULT_FTP_LINK in p else DEFAULT_FTP_LINK + p)
+    res['trace_list'] = tmp
     res['status'] = self.status
     return res
 
@@ -141,16 +160,19 @@ class CaptureTask(object):
   def trace_list(self):
     return self._trace_list
 
+
 class CaptureManager(object):
+  """Main class for capture manager."""
+
   def __init__(self, controller,
                capture_dir=DEFAULT_CAP_DIR,
                split_interval=DEFAULT_SPLIT_INTERVAL):
-    """Maintain the capture thread.
+    """Create the manager object and start the capture thread.
 
       Args:
-        controller: sniffer controller.
-        capture_dir: str, the capture directory
-        split_interval: float, the time interval before each split
+        controller: (BaseSniffer) Sniffer controller.
+        capture_dir: (string) The capture directory
+        split_interval: (float) the time interval before each split
     """
     self._controller = controller
     self._is_capturing = False
@@ -158,7 +180,7 @@ class CaptureManager(object):
     self._capture_dir = capture_dir
     self._split_interval = split_interval  # for temporary override
     self._running_tasks = []  # running capture task list
-    self._pending_tasks = []  # stopped tasks waiting for last capture to finish.
+    self._pending_tasks = []  # stopped tasks waiting for last capture to finish
     self._finished_tasks = []  # finished capture task list
     self._task_id_map = {}  # A dict of task id -> task for task lookup.
     # Sorted list of captured trace's (start epoch time, filename).
@@ -206,13 +228,15 @@ class CaptureManager(object):
       # state change: capture -> shutdown
       self._stop_capture()
       time.strftime('CaptureThread: shutdown capture @ %x %X.')
-      self._controller.close()
-
     print('Capture thread shutdown.')
 
   def _stop_capture(self):
     """Stop the capture with necessary bookkeeping."""
-    trace_path = self._controller.stop_capture()
+    trace_path = get_capture_filename_by_timestamp(
+        self._capture_start_time, time.time())
+    real_path = os.path.join(DEFAULT_CAP_DIR, trace_path)
+    print('CaptureManager: stopping capture, trace path %s' % real_path)
+    self._controller.stop_capture(real_path)
     trace_stop_time = time.time()
     trace_start_time = self._capture_start_time
     self._trace_file_list.append((trace_start_time,
@@ -223,8 +247,12 @@ class CaptureManager(object):
     self._add_trace_to_tasks(trace_path)
 
   def _split_capture(self):
-    """Split capture"""
-    trace_path = self._controller.split_capture()
+    """Split capture."""
+    trace_path = get_capture_filename_by_timestamp(
+        self._capture_start_time, time.time())
+    real_path = os.path.join(DEFAULT_CAP_DIR, trace_path)
+    print('CaptureManager: spliting capture, trace path %s' % real_path)
+    self._controller.split_capture(real_path)
     trace_start_time = self._capture_start_time
     trace_stop_time = time.time()
     self._capture_start_time = trace_stop_time
@@ -320,6 +348,7 @@ class CaptureManager(object):
       task.stop()
     self._shutdown = True
     self._capture_thread.join()
+    self._controller.close()
     self._save_tasks_to_disk()
 
   def get_controller_model(self):
@@ -328,22 +357,26 @@ class CaptureManager(object):
   def get_capture_config(self):
     """Get capture config as dict."""
     # Capture config is controller's config + split setting.
-    # TODO: should be converted to a generic config method.
-    config = {'Capture Split Interval': '%d seconds' % self._split_interval}
+    # TODO(liuta): should be converted to a generic config method.
+    config = {'Capture Split Interval': '%s seconds' % self._split_interval}
     config.update(self._controller.get_capture_config())
     return config
 
   def _save_tasks_to_disk(self):
     """Save the tasks to persistent storage."""
+    # TODO(liuta): need to use cloud storage for better capture storage.
     res = []
     for task in self._finished_tasks:
       res.append(task.to_dict())
-    with open(DEFAULT_TASK_SAVE_PATH, 'wb') as f:
-      json.dump(res, f)
-    print json.dumps(res)
+    try:
+      with open(DEFAULT_TASK_SAVE_PATH, 'wb') as f:
+        json.dump(res, f, indent=1)
+        print('%d tasks saved to %s.' % (len(res), DEFAULT_TASK_SAVE_PATH))
+    except IOError as ex:
+      print('Failed to save task: %s' % ex)
 
   def _load_tasks_from_disk(self):
-    """Load the task from disk"""
+    """Load the task from disk."""
     res = []
     try:
       with open(DEFAULT_TASK_SAVE_PATH, 'rb') as f:
@@ -351,7 +384,9 @@ class CaptureManager(object):
     except IOError:
       print 'No saved task, starting fresh.'
     for t in res:
-      self._finished_tasks.append(CaptureTask.from_dict(t))
+      task = CaptureTask.from_dict(t)
+      self._finished_tasks.append(task)
+      self._task_id_map[task.id] = task
 
 
 class CaptureTaskException(Exception):

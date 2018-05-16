@@ -1,12 +1,11 @@
 """Main entry point of Ellisys controller."""
 
-import os
 import sys
 import signal
 import time
 from flask import Flask, abort, render_template, request, jsonify
-from base_sniffer_device import BaseSnifferDevice as SnifferDevice
-from capture_manager import CaptureManager, CaptureTask
+from ellisys_controller import EllisysController
+from capture_manager import CaptureManager
 from capture_manager import CaptureTaskException, TaskNotFoundError,\
     TaskStoppedError, DuplicateTaskError
 from getpass import getuser
@@ -33,10 +32,13 @@ def landing_page():
   pending_list = _task_list_to_string(
       reversed(capture_manager.get_pending_tasks()))
   running_list.extend(pending_list)
+  # list config
+  config = capture_manager.get_capture_config()
+  config_list = sorted(config.items())
   return render_template('index.html', controller_model=model,
                          running_tasks=running_list,
                          finished_tasks=finished_list,
-                         capture_config=capture_manager.get_capture_config())
+                         capture_config=config_list)
 
 @app.route('/start/<capture_uuid>')
 def start_capture(capture_uuid):
@@ -105,6 +107,6 @@ def sigint_handler(signal, frame):
 
 if __name__ == "__main__":
   signal.signal(signal.SIGINT, sigint_handler)
-  sniffer = SnifferDevice()
-  capture_manager = CaptureManager(sniffer)
+  sniffer = EllisysController()
+  capture_manager = CaptureManager(sniffer, split_interval=600)
   app.run(host='0.0.0.0', port=5000)
