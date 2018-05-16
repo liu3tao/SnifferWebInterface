@@ -108,5 +108,5 @@ def sigint_handler(signal, frame):
 if __name__ == "__main__":
   signal.signal(signal.SIGINT, sigint_handler)
   sniffer = EllisysController()
-  capture_manager = CaptureManager(sniffer)
+  capture_manager = CaptureManager(sniffer, split_interval=600)
   app.run(host='0.0.0.0', port=5000)

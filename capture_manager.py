@@ -236,7 +236,7 @@ class CaptureManager(object):
         self._capture_start_time, time.time())
     real_path = os.path.join(DEFAULT_CAP_DIR, trace_path)
     print('CaptureManager: stopping capture, trace path %s' % real_path)
-    trace_path = self._controller.stop_capture(real_path)
+    self._controller.stop_capture(real_path)
     trace_stop_time = time.time()
     trace_start_time = self._capture_start_time
     self._trace_file_list.append((trace_start_time,
@@ -252,7 +252,7 @@ class CaptureManager(object):
         self._capture_start_time, time.time())
     real_path = os.path.join(DEFAULT_CAP_DIR, trace_path)
     print('CaptureManager: spliting capture, trace path %s' % real_path)
-    trace_path = self._controller.split_capture(real_path)
+    self._controller.split_capture(real_path)
     trace_start_time = self._capture_start_time
     trace_stop_time = time.time()
     self._capture_start_time = trace_stop_time
