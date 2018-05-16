@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Download Capture Files</title>
+    <style type="text/css">
+        .task_table {
+            width:100%;
+            border-collapse: collapse;
+        }
+        th, td {
+            padding: 5px;
+            border-bottom: 1px solid #ddd;
+            text-align:left; 
+        }
+        .running_row { background-color: #eeedff }
+    </style>
+</head>
+<body>
+<h1>Capture ID: {{ id }}</h1>
+<hr>
+<h2>Capture Tasks</h2>
+<table class="task_table">
+    <thead><tr class="task_header">
+        <th class="task_status">Capture Files</th>
+    </tr></thead>
+    {% for t in capture_list %}
+    <tr class="finished_row">
+        <td class="task_url"><a href="{{ t }}">{{ t }}</a></td>
+    </tr>
+    {% endfor %}
+</table>
+</body>
+</html>

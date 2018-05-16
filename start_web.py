@@ -78,7 +78,8 @@ def get_trace(capture_uuid):
   task = capture_manager.get_task_by_id(capture_uuid)
   if task is None:
     abort(404)
-  return jsonify(task.to_dict()['trace_list'])
+  return render_template('simple_download.html', id=capture_uuid,
+                         capture_list=task.to_dict()['trace_list'])
 
 def get_capture_filename_by_timestamp(start_time, stop_time):
   """Generate capture filename based on the specified timestamp."""
